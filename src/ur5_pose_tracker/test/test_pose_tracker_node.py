@@ -42,6 +42,25 @@ class _DummyLogger:
         self.errors.append(message)
 
 
+class _DummyParameter:
+    def __init__(self, value):
+        self.value = value
+
+
+class _DummyRosNode:
+    def __init__(self):
+        self._params = {}
+
+    def declare_parameter(self, name, default_value):
+        self._params.setdefault(name, default_value)
+
+    def get_parameter(self, name):
+        return _DummyParameter(self._params[name])
+
+    def set_parameter(self, name, value):
+        self._params[name] = value
+
+
 def _pose_msg(frame_id, x):
     return SimpleNamespace(
         header=SimpleNamespace(frame_id=frame_id),
@@ -54,7 +73,7 @@ def _pose_msg(frame_id, x):
 
 def test_validate_frame_accept_and_reject():
     node = RTDEServoNode(
-        expected_frame_id="base",
+        accepted_frame_ids=["base", "tool0"],
         rtde_control=_DummyControl(),
         rtde_receive=_DummyReceive(),
         control_hz=20.0,
@@ -62,14 +81,15 @@ def test_validate_frame_accept_and_reject():
     )
 
     assert node._validate_frame("base") is True
-    assert node._validate_frame("tool0") is False
+    assert node._validate_frame("tool0") is True
+    assert node._validate_frame("camera") is False
     assert node._validate_frame("") is False
 
 
 def test_latest_only_overwrites_old_target():
     control = _DummyControl()
     node = RTDEServoNode(
-        expected_frame_id="base",
+        accepted_frame_ids=["base"],
         rtde_control=control,
         rtde_receive=_DummyReceive(),
         control_hz=20.0,
@@ -89,7 +109,7 @@ def test_run_control_loop_triggers_safe_stop_on_timeout(monkeypatch):
     control = _DummyControl()
     logger = _DummyLogger()
     node = RTDEServoNode(
-        expected_frame_id="base",
+        accepted_frame_ids=["base"],
         rtde_control=control,
         rtde_receive=_DummyReceive(),
         control_hz=20.0,
@@ -114,7 +134,7 @@ def test_run_control_loop_handles_send_servo_exception(monkeypatch):
     control = _DummyControl()
     logger = _DummyLogger()
     node = RTDEServoNode(
-        expected_frame_id="base",
+        accepted_frame_ids=["base"],
         rtde_control=control,
         rtde_receive=_DummyReceive(),
         control_hz=20.0,
@@ -132,3 +152,37 @@ def test_run_control_loop_handles_send_servo_exception(monkeypatch):
     assert node._latest_target is None
     assert control.stop_calls >= 1
     assert any("servoL failed: boom" in message for message in logger.errors)
+
+
+def test_load_ros_parameters_updates_runtime_config():
+    node = RTDEServoNode(
+        accepted_frame_ids=["base"],
+        rtde_control=_DummyControl(),
+        rtde_receive=_DummyReceive(),
+        use_ros=False,
+    )
+    dummy_ros_node = _DummyRosNode()
+    node._ros_node = dummy_ros_node
+    node._declare_ros_parameters()
+
+    dummy_ros_node.set_parameter("robot_ip", "192.168.0.2")
+    dummy_ros_node.set_parameter("input_topic", "/camera_pose")
+    dummy_ros_node.set_parameter("control_hz", 50.0)
+    dummy_ros_node.set_parameter("accepted_frame_ids", ["base", "tool0"])
+    dummy_ros_node.set_parameter("pose_timeout_sec", 0.3)
+    dummy_ros_node.set_parameter("servo_speed", 0.5)
+    dummy_ros_node.set_parameter("servo_acceleration", 0.8)
+    dummy_ros_node.set_parameter("servo_lookahead_time", 0.2)
+    dummy_ros_node.set_parameter("servo_gain", 350)
+
+    node._load_ros_parameters()
+
+    assert node._robot_ip == "192.168.0.2"
+    assert node._input_topic == "/camera_pose"
+    assert node._control_hz == pytest.approx(50.0)
+    assert node._accepted_frame_ids == {"base", "tool0"}
+    assert node._pose_timeout_sec == pytest.approx(0.3)
+    assert node._speed == pytest.approx(0.5)
+    assert node._acceleration == pytest.approx(0.8)
+    assert node._lookahead_time == pytest.approx(0.2)
+    assert node._gain == pytest.approx(350.0)
