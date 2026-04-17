@@ -1,0 +1,14 @@
+ur5_pose_tracker:
+  ros__parameters:
+    # 主数据流参数 / Main dataflow parameters.
+    robot_ip: "192.168.0.2"
+    input_topic: "/target_pose"
+    control_hz: 20.0
+    accepted_frame_ids: ["base"]
+    pose_timeout_sec: 0.5
+
+    # 伺服参数 / Servo parameters.
+    servo_speed: 0.25
+    servo_acceleration: 0.5
+    servo_lookahead_time: 0.1
+    servo_gain: 300
