@@ -4,11 +4,13 @@ ur5_pose_tracker:
     robot_ip: "192.168.0.199"
     input_topic: "~/ur_target_pose"
     control_hz: 20.0
-    accepted_frame_ids: ["base"]
+    accepted_frame_ids: ["base_link"]
     pose_timeout_sec: 0.5
 
     # 伺服参数 / Servo parameters.
+    # 这两个参数只会在平滑停机时生效，其他时候通过 control_hz、servo_lookahead_time、servo_gain 来控制。
     servo_speed: 0.6
-    servo_acceleration: 0.3
+    servo_acceleration: 0.2
+
     servo_lookahead_time: 0.1
-    servo_gain: 300
+    servo_gain: 100

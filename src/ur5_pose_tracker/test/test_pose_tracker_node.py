@@ -3,10 +3,32 @@ from types import SimpleNamespace
 import sys
 
 import pytest
+import rclpy
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ur5_pose_tracker.pose_tracker_node import RTDEServoNode
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _rclpy_module_context():
+    """RTDEServoNode 继承 rclpy.Node，单测需先初始化 rclpy。"""
+    import os
+
+    log_dir = Path(__file__).resolve().parent / ".ros_test_logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    prev_ros_log = os.environ.get("ROS_LOG_DIR")
+    os.environ["ROS_LOG_DIR"] = str(log_dir)
+    try:
+        rclpy.init()
+        yield
+    finally:
+        if rclpy.ok():
+            rclpy.shutdown()
+        if prev_ros_log is None:
+            os.environ.pop("ROS_LOG_DIR", None)
+        else:
+            os.environ["ROS_LOG_DIR"] = prev_ros_log
 
 
 class _DummyControl:
@@ -17,7 +39,7 @@ class _DummyControl:
     def servoL(self, target, speed, acceleration, dt, lookahead_time, gain):
         self.calls.append((target, speed, acceleration, dt, lookahead_time, gain))
 
-    def servoStop(self):
+    def servoStop(self, _a=10.0):
         self.stop_calls += 1
 
 

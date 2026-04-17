@@ -1,24 +1,13 @@
 import math
-import logging
 import threading
 import time
 from typing import Optional
 
-try:
-    import rclpy
-    from geometry_msgs.msg import PoseStamped
-    from rclpy.node import Node
-except ImportError:  # pragma: no cover - fallback for test environment
-    rclpy = None
-    PoseStamped = object
-    Node = object
-
-try:
-    from rtde_control import RTDEControlInterface
-    from rtde_receive import RTDEReceiveInterface
-except ImportError:  # pragma: no cover - fallback for test environment
-    RTDEControlInterface = None
-    RTDEReceiveInterface = None
+import rclpy
+from geometry_msgs.msg import PoseStamped
+from rclpy.node import Node
+from rtde_control import RTDEControlInterface
+from rtde_receive import RTDEReceiveInterface
 
 
 class RTDEServoNode(Node):
@@ -41,9 +30,7 @@ class RTDEServoNode(Node):
         if accepted_frame_ids is None:
             accepted_frame_ids = [expected_frame_id or "base_link"]
 
-        if rclpy is None:
-            raise RuntimeError("rclpy is required to run RTDEServoNode")
-        super().__init__("rtde_servo_node")
+        super().__init__("ur5_pose_tracker")
 
         self._robot_ip = str(robot_ip)
         self._input_topic = str(input_topic)
@@ -65,10 +52,29 @@ class RTDEServoNode(Node):
         self._tcp_pose_publisher = None
 
         self._param_node = self
-        self._logger = logger or logging.getLogger("ur5_pose_tracker")
-        self._logger = self.get_logger()
+        # 日志 Logger: 单测注入 logger；运行时用 ROS logger（终端 / rosout）。
+        self._logger = logger if logger is not None else self.get_logger()
         self._declare_ros_parameters()
         self._load_ros_parameters()
+        startup_params_log = (
+            "Node parameters: "
+            f"robot_ip={self._robot_ip}, "
+            f"input_topic={self._input_topic}, "
+            f"control_hz={self._control_hz}, "
+            f"accepted_frame_ids={sorted(self._accepted_frame_ids)}, "
+            f"pose_timeout_sec={self._pose_timeout_sec}, "
+            f"servo_speed={self._speed}, "
+            f"servo_acceleration={self._acceleration}, "
+            f"servo_lookahead_time={self._lookahead_time}, "
+            f"servo_gain={self._gain}"
+        )
+        self._logger.info(startup_params_log)
+        self._logger.warning(
+            "ur_rtde.servoL ignores servo_speed and servo_acceleration during motion "
+            "(upstream API); tune control_hz, servo_lookahead_time, servo_gain. "
+            "servo_acceleration is applied as tool deceleration [m/s^2] in servoStop()."
+        )
+        self._logger.info(f"Connecting robot RTDE interfaces: ip={self._robot_ip}")
         self.create_subscription(
             PoseStamped,
             self._input_topic,
@@ -90,6 +96,8 @@ class RTDEServoNode(Node):
             if RTDEReceiveInterface is None:
                 raise RuntimeError("ur_rtde receive interface is not available")
             self._rtde_receive = RTDEReceiveInterface(self._robot_ip)
+
+        self._logger.info(f"Robot connected via RTDE: ip={self._robot_ip}")
 
     def _declare_ros_parameters(self):
         if self._param_node is None:
@@ -158,6 +166,7 @@ class RTDEServoNode(Node):
         ]
 
     def _send_servo(self, target):
+        # ur_rtde servoL：speed/acceleration 形参库内未用于轨迹，运动由 dt、lookahead、gain 决定。
         self._rtde_control.servoL(
             target,
             self._speed,
@@ -166,6 +175,13 @@ class RTDEServoNode(Node):
             self._lookahead_time,
             self._gain,
         )
+
+    def _servo_stop_tool_deceleration_mss(self):
+        """servoStop 工具减速率 [m/s^2]，与 YAML servo_acceleration 一致。"""
+        a = float(self._acceleration)
+        if a <= 0.0:
+            return 10.0
+        return a
 
     def _now_ros_time(self):
         return self.get_clock().now()
@@ -207,9 +223,24 @@ class RTDEServoNode(Node):
 
     def _safe_stop(self):
         try:
-            self._rtde_control.servoStop()
+            self._rtde_control.servoStop(self._servo_stop_tool_deceleration_mss())
         except Exception as exc:  # pragma: no cover - hardware safety path
             self._logger.error(f"servoStop failed: {exc}")
+
+    def _disconnect_rtde(self):
+        control = getattr(self, "_rtde_control", None)
+        receive = getattr(self, "_rtde_receive", None)
+        try:
+            if control is not None:
+                if hasattr(control, "stopScript"):
+                    control.stopScript()
+                if hasattr(control, "disconnect"):
+                    control.disconnect()
+            if receive is not None and hasattr(receive, "disconnect"):
+                receive.disconnect()
+            self._logger.info(f"Robot disconnected: ip={self._robot_ip}")
+        except Exception as exc:  # pragma: no cover - hardware cleanup path
+            self._logger.warning(f"RTDE disconnect warning: {exc}")
 
     def run_control_loop(self, max_steps=None):
         step = 0
@@ -248,6 +279,7 @@ class RTDEServoNode(Node):
                 time.sleep(self._dt)
         finally:
             self._safe_stop()
+            self._disconnect_rtde()
 
     @staticmethod
     def _quat_to_rotvec(qx, qy, qz, qw):
@@ -284,9 +316,6 @@ class RTDEServoNode(Node):
 
 
 def main(args: Optional[list] = None):
-    if rclpy is None:
-        raise RuntimeError("rclpy is required to run RTDEServoNode")
-
     rclpy.init(args=args)
     node = RTDEServoNode()
     try:
@@ -295,4 +324,5 @@ def main(args: Optional[list] = None):
         node._logger.info("Shutdown requested.")
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
