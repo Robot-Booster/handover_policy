@@ -31,6 +31,16 @@ class _SimpleLogger:
         print(message)
 
 
+class _SimpleRosTime:
+    def __init__(self):
+        now = time.time()
+        self._sec = int(now)
+        self._nanosec = int((now - self._sec) * 1_000_000_000)
+
+    def to_msg(self):
+        return type("TimeMsg", (), {"sec": self._sec, "nanosec": self._nanosec})()
+
+
 class RTDEServoNode:
     def __init__(
         self,
@@ -68,6 +78,8 @@ class RTDEServoNode:
         self._latest_target_time = 0.0
         self._target_lock = threading.Lock()
         self._running = True
+        self._tcp_pose_frame_id = "base_link"
+        self._tcp_pose_publisher = None
 
         self._ros_node = None
         self._logger = logger or _SimpleLogger()
@@ -83,6 +95,9 @@ class RTDEServoNode:
                 self._input_topic,
                 self._on_pose_msg,
                 10,
+            )
+            self._tcp_pose_publisher = self._ros_node.create_publisher(
+                PoseStamped, "~/tcp_pose", 10
             )
 
         self._rtde_control = rtde_control
@@ -169,6 +184,46 @@ class RTDEServoNode:
             self._gain,
         )
 
+    def _now_ros_time(self):
+        if self._ros_node is not None:
+            return self._ros_node.get_clock().now()
+        return _SimpleRosTime()
+
+    def _read_actual_tcp_pose(self):
+        tcp_pose = self._rtde_receive.getActualTCPPose()
+        if tcp_pose is None or len(tcp_pose) != 6:
+            raise ValueError("Invalid tcp pose data")
+        try:
+            return [float(value) for value in tcp_pose]
+        except (TypeError, ValueError):
+            raise ValueError("Invalid tcp pose data")
+
+    def _build_tcp_pose_msg(self, tcp_pose):
+        msg = PoseStamped()
+        msg.header.stamp = self._now_ros_time().to_msg()
+        msg.header.frame_id = self._tcp_pose_frame_id
+        msg.pose.position.x = float(tcp_pose[0])
+        msg.pose.position.y = float(tcp_pose[1])
+        msg.pose.position.z = float(tcp_pose[2])
+        qx, qy, qz, qw = self._rotvec_to_quat(
+            float(tcp_pose[3]), float(tcp_pose[4]), float(tcp_pose[5])
+        )
+        msg.pose.orientation.x = qx
+        msg.pose.orientation.y = qy
+        msg.pose.orientation.z = qz
+        msg.pose.orientation.w = qw
+        return msg
+
+    def _publish_tcp_pose(self):
+        if self._tcp_pose_publisher is None:
+            return
+        try:
+            tcp_pose = self._read_actual_tcp_pose()
+            msg = self._build_tcp_pose_msg(tcp_pose)
+            self._tcp_pose_publisher.publish(msg)
+        except Exception as exc:
+            self._logger.warning(f"Failed to read tcp pose: {exc}")
+
     def _safe_stop(self):
         try:
             self._rtde_control.servoStop()
@@ -206,6 +261,7 @@ class RTDEServoNode:
                     if not rclpy.ok():
                         break
 
+                self._publish_tcp_pose()
                 step += 1
                 if max_steps is not None and step >= max_steps:
                     break
@@ -228,6 +284,23 @@ class RTDEServoNode:
         axis_y = qy / sin_half
         axis_z = qz / sin_half
         return axis_x * angle, axis_y * angle, axis_z * angle
+
+    @staticmethod
+    def _rotvec_to_quat(rx, ry, rz):
+        angle = math.sqrt(rx * rx + ry * ry + rz * rz)
+        if angle < 1e-12:
+            return 0.0, 0.0, 0.0, 1.0
+        axis_x = rx / angle
+        axis_y = ry / angle
+        axis_z = rz / angle
+        half = angle * 0.5
+        sin_half = math.sin(half)
+        return (
+            axis_x * sin_half,
+            axis_y * sin_half,
+            axis_z * sin_half,
+            math.cos(half),
+        )
 
 
 def main(args: Optional[list] = None):

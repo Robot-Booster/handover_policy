@@ -71,6 +71,18 @@ def _pose_msg(frame_id, x):
     )
 
 
+def _build_pose_stamped_class():
+    class _PoseStamped:
+        def __init__(self):
+            self.header = SimpleNamespace(stamp=None, frame_id="")
+            self.pose = SimpleNamespace(
+                position=SimpleNamespace(x=0.0, y=0.0, z=0.0),
+                orientation=SimpleNamespace(x=0.0, y=0.0, z=0.0, w=1.0),
+            )
+
+    return _PoseStamped
+
+
 def test_validate_frame_accept_and_reject():
     node = RTDEServoNode(
         accepted_frame_ids=["base", "tool0"],
@@ -186,3 +198,101 @@ def test_load_ros_parameters_updates_runtime_config():
     assert node._acceleration == pytest.approx(0.8)
     assert node._lookahead_time == pytest.approx(0.2)
     assert node._gain == pytest.approx(350.0)
+
+
+def test_publish_tcp_pose_success_path(monkeypatch):
+    control = _DummyControl()
+    logger = _DummyLogger()
+    published = []
+    node = RTDEServoNode(
+        accepted_frame_ids=["base_link"],
+        rtde_control=control,
+        rtde_receive=_DummyReceive(),
+        control_hz=20.0,
+        logger=logger,
+        use_ros=False,
+    )
+    node._tcp_pose_publisher = SimpleNamespace(publish=lambda msg: published.append(msg))
+    node._rtde_receive = SimpleNamespace(
+        getActualTCPPose=lambda: [0.1, -0.2, 0.3, 0.0, 0.0, 0.0]
+    )
+    node._now_ros_time = lambda: SimpleNamespace(
+        to_msg=lambda: SimpleNamespace(sec=1, nanosec=2)
+    )
+    monkeypatch.setattr(
+        "ur5_pose_tracker.pose_tracker_node.PoseStamped", _build_pose_stamped_class()
+    )
+
+    node._publish_tcp_pose()
+
+    assert len(published) == 1
+    msg = published[0]
+    assert msg.header.frame_id == "base_link"
+    assert msg.pose.position.x == pytest.approx(0.1)
+    assert msg.pose.position.y == pytest.approx(-0.2)
+    assert msg.pose.position.z == pytest.approx(0.3)
+    assert msg.pose.orientation.x == pytest.approx(0.0)
+    assert msg.pose.orientation.y == pytest.approx(0.0)
+    assert msg.pose.orientation.z == pytest.approx(0.0)
+    assert msg.pose.orientation.w == pytest.approx(1.0)
+
+
+def test_publish_tcp_pose_skip_on_rtde_error(monkeypatch):
+    node = RTDEServoNode(
+        accepted_frame_ids=["base_link"],
+        rtde_control=_DummyControl(),
+        rtde_receive=_DummyReceive(),
+        control_hz=20.0,
+        logger=_DummyLogger(),
+        use_ros=False,
+    )
+    node._tcp_pose_publisher = SimpleNamespace(
+        publish=lambda _msg: (_ for _ in ()).throw(AssertionError("should not publish"))
+    )
+    node._rtde_receive = SimpleNamespace(
+        getActualTCPPose=lambda: (_ for _ in ()).throw(RuntimeError("rtde down"))
+    )
+    monkeypatch.setattr(
+        "ur5_pose_tracker.pose_tracker_node.PoseStamped", _build_pose_stamped_class()
+    )
+
+    node._publish_tcp_pose()
+
+    assert any(
+        "Failed to read tcp pose: rtde down" in message
+        for message in node._logger.warnings
+    )
+
+
+def test_run_control_loop_publishes_tcp_pose_every_step(monkeypatch):
+    node = RTDEServoNode(
+        accepted_frame_ids=["base_link"],
+        rtde_control=_DummyControl(),
+        rtde_receive=_DummyReceive(),
+        control_hz=20.0,
+        use_ros=False,
+    )
+    publish_count = {"value": 0}
+    monkeypatch.setattr("ur5_pose_tracker.pose_tracker_node.time.sleep", lambda _dt: None)
+    node._publish_tcp_pose = lambda: publish_count.__setitem__(
+        "value", publish_count["value"] + 1
+    )
+
+    node.run_control_loop(max_steps=3)
+
+    assert publish_count["value"] == 3
+
+
+def test_rotvec_to_quat_zero_rotation():
+    node = RTDEServoNode(
+        accepted_frame_ids=["base_link"],
+        rtde_control=_DummyControl(),
+        rtde_receive=_DummyReceive(),
+        use_ros=False,
+    )
+    quat = node._rotvec_to_quat(0.0, 0.0, 0.0)
+
+    assert quat[0] == pytest.approx(0.0)
+    assert quat[1] == pytest.approx(0.0)
+    assert quat[2] == pytest.approx(0.0)
+    assert quat[3] == pytest.approx(1.0)
