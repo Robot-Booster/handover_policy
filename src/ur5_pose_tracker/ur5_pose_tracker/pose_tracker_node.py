@@ -39,7 +39,7 @@ class RTDEServoNode(Node):
         logger=None,
     ):
         if accepted_frame_ids is None:
-            accepted_frame_ids = [expected_frame_id or "base"]
+            accepted_frame_ids = [expected_frame_id or "base_link"]
 
         if rclpy is None:
             raise RuntimeError("rclpy is required to run RTDEServoNode")
@@ -49,7 +49,7 @@ class RTDEServoNode(Node):
         self._input_topic = str(input_topic)
         self._accepted_frame_ids = {str(frame) for frame in accepted_frame_ids if frame}
         if not self._accepted_frame_ids:
-            self._accepted_frame_ids = {"base"}
+            self._accepted_frame_ids = {"base_link"}
         self._control_hz = float(control_hz)
         self._speed = float(speed)
         self._acceleration = float(acceleration)
@@ -115,7 +115,7 @@ class RTDEServoNode(Node):
         frames = self._param_node.get_parameter("accepted_frame_ids").value
         self._accepted_frame_ids = {str(frame) for frame in frames if frame}
         if not self._accepted_frame_ids:
-            self._accepted_frame_ids = {"base"}
+            self._accepted_frame_ids = {"base_link"}
         self._pose_timeout_sec = float(
             self._param_node.get_parameter("pose_timeout_sec").value
         )
