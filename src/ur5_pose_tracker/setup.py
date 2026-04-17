@@ -22,5 +22,9 @@ setup(
     description="UR5 pose tracker package skeleton.",
     license="Apache-2.0",
     tests_require=["pytest"],
-    entry_points={"console_scripts": []},
+    entry_points={
+        "console_scripts": [
+            "pose_tracker_node = ur5_pose_tracker.pose_tracker_node:main",
+        ]
+    },
 )
