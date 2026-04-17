@@ -1,3 +1,37 @@
+# --- Python / 虚拟环境 ---
 /.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# --- ROS 2 colcon（仅仓库根）---
+/build/
+/install/
+/log/
+
+# --- 本地草稿脚本（不入库）---
+/scripts/
+
+# --- 文档与 Agent 计划缓存 ---
 /docs/superpowers/
+
+# --- Git worktree 附加检出目录 ---
 /.worktree/
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# --- 单测 ROS 日志（若出现在根目录）---
+/.ros_test_logs/
