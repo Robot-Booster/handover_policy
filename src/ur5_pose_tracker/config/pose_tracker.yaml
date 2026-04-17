@@ -8,7 +8,7 @@ ur5_pose_tracker:
     pose_timeout_sec: 0.5
 
     # 伺服参数 / Servo parameters.
-    servo_speed: 0.25
-    servo_acceleration: 0.5
+    servo_speed: 0.6
+    servo_acceleration: 0.3
     servo_lookahead_time: 0.1
     servo_gain: 300

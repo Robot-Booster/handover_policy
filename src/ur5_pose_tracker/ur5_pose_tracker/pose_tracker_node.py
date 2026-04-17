@@ -21,16 +21,6 @@ except ImportError:  # pragma: no cover - fallback for test environment
     RTDEReceiveInterface = None
 
 
-class _SimpleRosTime:
-    def __init__(self):
-        now = time.time()
-        self._sec = int(now)
-        self._nanosec = int((now - self._sec) * 1_000_000_000)
-
-    def to_msg(self):
-        return type("TimeMsg", (), {"sec": self._sec, "nanosec": self._nanosec})()
-
-
 class RTDEServoNode(Node):
     def __init__(
         self,
@@ -39,24 +29,21 @@ class RTDEServoNode(Node):
         accepted_frame_ids=None,
         input_topic="~/ur_target_pose",
         control_hz=20.0,
-        speed=0.25,
-        acceleration=1.2,
+        speed=0.6,
+        acceleration=0.3,
         lookahead_time=0.1,
         gain=300.0,
         pose_timeout_sec=0.5,
         rtde_control=None,
         rtde_receive=None,
         logger=None,
-        use_ros=True,
     ):
         if accepted_frame_ids is None:
             accepted_frame_ids = [expected_frame_id or "base"]
 
-        self._use_ros = bool(use_ros)
-        if self._use_ros:
-            if rclpy is None:
-                raise RuntimeError("rclpy is required when use_ros=True")
-            super().__init__("rtde_servo_node")
+        if rclpy is None:
+            raise RuntimeError("rclpy is required to run RTDEServoNode")
+        super().__init__("rtde_servo_node")
 
         self._robot_ip = str(robot_ip)
         self._input_topic = str(input_topic)
@@ -77,22 +64,20 @@ class RTDEServoNode(Node):
         self._tcp_pose_frame_id = "base_link"
         self._tcp_pose_publisher = None
 
-        self._param_node = None
+        self._param_node = self
         self._logger = logger or logging.getLogger("ur5_pose_tracker")
-        if self._use_ros:
-            self._logger = self.get_logger()
-            self._param_node = self
-            self._declare_ros_parameters()
-            self._load_ros_parameters()
-            self.create_subscription(
-                PoseStamped,
-                self._input_topic,
-                self._on_pose_msg,
-                10,
-            )
-            self._tcp_pose_publisher = self.create_publisher(
-                PoseStamped, "~/tcp_pose", 10
-            )
+        self._logger = self.get_logger()
+        self._declare_ros_parameters()
+        self._load_ros_parameters()
+        self.create_subscription(
+            PoseStamped,
+            self._input_topic,
+            self._on_pose_msg,
+            10,
+        )
+        self._tcp_pose_publisher = self.create_publisher(
+            PoseStamped, "~/tcp_pose", 10
+        )
 
         self._rtde_control = rtde_control
         if self._rtde_control is None:
@@ -119,7 +104,7 @@ class RTDEServoNode(Node):
         self._param_node.declare_parameter("servo_speed", self._speed)
         self._param_node.declare_parameter("servo_acceleration", self._acceleration)
         self._param_node.declare_parameter("servo_lookahead_time", self._lookahead_time)
-        self._param_node.declare_parameter("servo_gain", self._gain)
+        self._param_node.declare_parameter("servo_gain", int(self._gain))
 
     def _load_ros_parameters(self):
         if self._param_node is None:
@@ -183,9 +168,7 @@ class RTDEServoNode(Node):
         )
 
     def _now_ros_time(self):
-        if self._use_ros:
-            return self.get_clock().now()
-        return _SimpleRosTime()
+        return self.get_clock().now()
 
     def _read_actual_tcp_pose(self):
         tcp_pose = self._rtde_receive.getActualTCPPose()
@@ -254,10 +237,9 @@ class RTDEServoNode(Node):
                                 self._latest_target_time = 0.0
 
                 # 主控制数据流 Main control data flow: spin once and send latest target.
-                if self._use_ros and rclpy is not None:
-                    rclpy.spin_once(self, timeout_sec=0.0)
-                    if not rclpy.ok():
-                        break
+                rclpy.spin_once(self, timeout_sec=0.0)
+                if not rclpy.ok():
+                    break
 
                 self._publish_tcp_pose()
                 step += 1
@@ -306,7 +288,7 @@ def main(args: Optional[list] = None):
         raise RuntimeError("rclpy is required to run RTDEServoNode")
 
     rclpy.init(args=args)
-    node = RTDEServoNode(use_ros=True)
+    node = RTDEServoNode()
     try:
         node.run_control_loop()
     except KeyboardInterrupt:

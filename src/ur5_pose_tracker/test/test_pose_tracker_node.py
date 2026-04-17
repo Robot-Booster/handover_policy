@@ -89,7 +89,6 @@ def test_validate_frame_accept_and_reject():
         rtde_control=_DummyControl(),
         rtde_receive=_DummyReceive(),
         control_hz=20.0,
-        use_ros=False,
     )
 
     assert node._validate_frame("base") is True
@@ -105,7 +104,6 @@ def test_latest_only_overwrites_old_target():
         rtde_control=control,
         rtde_receive=_DummyReceive(),
         control_hz=20.0,
-        use_ros=False,
     )
 
     node._on_pose_msg(_pose_msg("base", 0.1))
@@ -126,7 +124,6 @@ def test_run_control_loop_triggers_safe_stop_on_timeout(monkeypatch):
         rtde_receive=_DummyReceive(),
         control_hz=20.0,
         logger=logger,
-        use_ros=False,
     )
     node._pose_timeout_sec = 0.1
     node._latest_target = [0.1, 0.2, 0.3, 0.0, 0.0, 0.0]
@@ -151,7 +148,6 @@ def test_run_control_loop_handles_send_servo_exception(monkeypatch):
         rtde_receive=_DummyReceive(),
         control_hz=20.0,
         logger=logger,
-        use_ros=False,
     )
     node._latest_target = [0.1, 0.2, 0.3, 0.0, 0.0, 0.0]
     node._latest_target_time = 10.0
@@ -171,7 +167,6 @@ def test_load_ros_parameters_updates_runtime_config():
         accepted_frame_ids=["base"],
         rtde_control=_DummyControl(),
         rtde_receive=_DummyReceive(),
-        use_ros=False,
     )
     dummy_ros_node = _DummyRosNode()
     node._param_node = dummy_ros_node
@@ -210,7 +205,6 @@ def test_publish_tcp_pose_success_path(monkeypatch):
         rtde_receive=_DummyReceive(),
         control_hz=20.0,
         logger=logger,
-        use_ros=False,
     )
     node._tcp_pose_publisher = SimpleNamespace(publish=lambda msg: published.append(msg))
     node._rtde_receive = SimpleNamespace(
@@ -244,7 +238,6 @@ def test_publish_tcp_pose_skip_on_rtde_error(monkeypatch):
         rtde_receive=_DummyReceive(),
         control_hz=20.0,
         logger=_DummyLogger(),
-        use_ros=False,
     )
     node._tcp_pose_publisher = SimpleNamespace(
         publish=lambda _msg: (_ for _ in ()).throw(AssertionError("should not publish"))
@@ -270,7 +263,6 @@ def test_run_control_loop_publishes_tcp_pose_every_step(monkeypatch):
         rtde_control=_DummyControl(),
         rtde_receive=_DummyReceive(),
         control_hz=20.0,
-        use_ros=False,
     )
     publish_count = {"value": 0}
     monkeypatch.setattr("ur5_pose_tracker.pose_tracker_node.time.sleep", lambda _dt: None)
@@ -288,7 +280,6 @@ def test_rotvec_to_quat_zero_rotation():
         accepted_frame_ids=["base_link"],
         rtde_control=_DummyControl(),
         rtde_receive=_DummyReceive(),
-        use_ros=False,
     )
     quat = node._rotvec_to_quat(0.0, 0.0, 0.0)
 
