@@ -1,0 +1,3 @@
+[submodule "thirdparty/Fast-HaMeR"]
+	path = thirdparty/Fast-HaMeR
+	url = https://github.com/hunainahmedj/Fast-HaMeR.git
