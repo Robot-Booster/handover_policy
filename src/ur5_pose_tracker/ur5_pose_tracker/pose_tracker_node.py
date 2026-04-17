@@ -53,7 +53,9 @@ class RTDEServoNode:
         self._lookahead_time = float(lookahead_time)
         self._gain = float(gain)
         self._dt = 1.0 / self._control_hz
+        self._pose_timeout_sec = 0.5
         self._latest_target = None
+        self._latest_target_time = 0.0
         self._target_lock = threading.Lock()
         self._running = True
 
@@ -91,6 +93,7 @@ class RTDEServoNode:
         target = self._pose_to_servol_target(msg.pose)
         with self._target_lock:
             self._latest_target = target
+            self._latest_target_time = time.monotonic()
 
     def _validate_frame(self, frame_id):
         return bool(frame_id) and frame_id == self._expected_frame_id
@@ -132,9 +135,24 @@ class RTDEServoNode:
             while self._running:
                 with self._target_lock:
                     target = self._latest_target
+                    target_time = self._latest_target_time
 
                 if target is not None:
-                    self._send_servo(target)
+                    if (time.monotonic() - target_time) > self._pose_timeout_sec:
+                        self._logger.warning("Pose timeout, stopping servo.")
+                        self._safe_stop()
+                        with self._target_lock:
+                            self._latest_target = None
+                            self._latest_target_time = 0.0
+                    else:
+                        try:
+                            self._send_servo(target)
+                        except Exception as exc:
+                            self._logger.error(f"servoL failed: {exc}")
+                            self._safe_stop()
+                            with self._target_lock:
+                                self._latest_target = None
+                                self._latest_target_time = 0.0
 
                 # 主控制数据流 Main control data flow: spin once and send latest target.
                 if self._ros_node is not None and rclpy is not None:

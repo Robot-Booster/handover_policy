@@ -12,17 +12,34 @@ from ur5_pose_tracker.pose_tracker_node import RTDEServoNode
 class _DummyControl:
     def __init__(self):
         self.calls = []
+        self.stop_calls = 0
 
     def servoL(self, target, speed, acceleration, dt, lookahead_time, gain):
         self.calls.append((target, speed, acceleration, dt, lookahead_time, gain))
 
     def servoStop(self):
-        pass
+        self.stop_calls += 1
 
 
 class _DummyReceive:
     def getActualTCPPose(self):
         return [0.0] * 6
+
+
+class _DummyLogger:
+    def __init__(self):
+        self.infos = []
+        self.warnings = []
+        self.errors = []
+
+    def info(self, message):
+        self.infos.append(message)
+
+    def warning(self, message):
+        self.warnings.append(message)
+
+    def error(self, message):
+        self.errors.append(message)
 
 
 def _pose_msg(frame_id, x):
@@ -66,3 +83,52 @@ def test_latest_only_overwrites_old_target():
 
     assert len(control.calls) == 1
     assert control.calls[0][0][0] == pytest.approx(0.9)
+
+
+def test_run_control_loop_triggers_safe_stop_on_timeout(monkeypatch):
+    control = _DummyControl()
+    logger = _DummyLogger()
+    node = RTDEServoNode(
+        expected_frame_id="base",
+        rtde_control=control,
+        rtde_receive=_DummyReceive(),
+        control_hz=20.0,
+        logger=logger,
+        use_ros=False,
+    )
+    node._pose_timeout_sec = 0.1
+    node._latest_target = [0.1, 0.2, 0.3, 0.0, 0.0, 0.0]
+    node._latest_target_time = 0.0
+
+    monkeypatch.setattr("ur5_pose_tracker.pose_tracker_node.time.monotonic", lambda: 10.0)
+
+    node.run_control_loop(max_steps=1)
+
+    assert len(control.calls) == 0
+    assert node._latest_target is None
+    assert control.stop_calls >= 1
+    assert any("Pose timeout" in message for message in logger.warnings)
+
+
+def test_run_control_loop_handles_send_servo_exception(monkeypatch):
+    control = _DummyControl()
+    logger = _DummyLogger()
+    node = RTDEServoNode(
+        expected_frame_id="base",
+        rtde_control=control,
+        rtde_receive=_DummyReceive(),
+        control_hz=20.0,
+        logger=logger,
+        use_ros=False,
+    )
+    node._latest_target = [0.1, 0.2, 0.3, 0.0, 0.0, 0.0]
+    node._latest_target_time = 10.0
+    node._pose_timeout_sec = 5.0
+    monkeypatch.setattr("ur5_pose_tracker.pose_tracker_node.time.monotonic", lambda: 10.0)
+    node._send_servo = lambda _target: (_ for _ in ()).throw(RuntimeError("boom"))
+
+    node.run_control_loop(max_steps=1)
+
+    assert node._latest_target is None
+    assert control.stop_calls >= 1
+    assert any("servoL failed: boom" in message for message in logger.errors)
