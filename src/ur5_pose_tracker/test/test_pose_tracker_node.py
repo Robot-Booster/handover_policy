@@ -174,7 +174,7 @@ def test_load_ros_parameters_updates_runtime_config():
         use_ros=False,
     )
     dummy_ros_node = _DummyRosNode()
-    node._ros_node = dummy_ros_node
+    node._param_node = dummy_ros_node
     node._declare_ros_parameters()
 
     dummy_ros_node.set_parameter("robot_ip", "192.168.0.2")

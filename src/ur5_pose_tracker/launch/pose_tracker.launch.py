@@ -19,7 +19,7 @@ def generate_launch_description():
     )
     input_topic_arg = DeclareLaunchArgument(
         "input_topic",
-        default_value="/target_pose",
+        default_value="~/ur_target_pose",
         description="Input pose topic for tracking.",
     )
     node_executable_arg = DeclareLaunchArgument(
@@ -34,7 +34,7 @@ def generate_launch_description():
         name="ur5_pose_tracker",
         output="screen",
         parameters=[params_file],
-        remappings=[("/target_pose", input_topic)],
+        remappings=[("~/ur_target_pose", input_topic)],
     )
 
     return LaunchDescription(

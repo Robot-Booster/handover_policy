@@ -1,8 +1,8 @@
 ur5_pose_tracker:
   ros__parameters:
     # 主数据流参数 / Main dataflow parameters.
-    robot_ip: "192.168.0.2"
-    input_topic: "/target_pose"
+    robot_ip: "192.168.0.199"
+    input_topic: "~/ur_target_pose"
     control_hz: 20.0
     accepted_frame_ids: ["base"]
     pose_timeout_sec: 0.5

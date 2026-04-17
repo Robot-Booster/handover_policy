@@ -1,4 +1,5 @@
 import math
+import logging
 import threading
 import time
 from typing import Optional
@@ -20,17 +21,6 @@ except ImportError:  # pragma: no cover - fallback for test environment
     RTDEReceiveInterface = None
 
 
-class _SimpleLogger:
-    def info(self, message):
-        print(message)
-
-    def warning(self, message):
-        print(message)
-
-    def error(self, message):
-        print(message)
-
-
 class _SimpleRosTime:
     def __init__(self):
         now = time.time()
@@ -41,13 +31,13 @@ class _SimpleRosTime:
         return type("TimeMsg", (), {"sec": self._sec, "nanosec": self._nanosec})()
 
 
-class RTDEServoNode:
+class RTDEServoNode(Node):
     def __init__(
         self,
         robot_ip="127.0.0.1",
         expected_frame_id=None,
         accepted_frame_ids=None,
-        input_topic="/target_pose",
+        input_topic="~/ur_target_pose",
         control_hz=20.0,
         speed=0.25,
         acceleration=1.2,
@@ -61,6 +51,12 @@ class RTDEServoNode:
     ):
         if accepted_frame_ids is None:
             accepted_frame_ids = [expected_frame_id or "base"]
+
+        self._use_ros = bool(use_ros)
+        if self._use_ros:
+            if rclpy is None:
+                raise RuntimeError("rclpy is required when use_ros=True")
+            super().__init__("rtde_servo_node")
 
         self._robot_ip = str(robot_ip)
         self._input_topic = str(input_topic)
@@ -81,22 +77,20 @@ class RTDEServoNode:
         self._tcp_pose_frame_id = "base_link"
         self._tcp_pose_publisher = None
 
-        self._ros_node = None
-        self._logger = logger or _SimpleLogger()
-        if use_ros:
-            if rclpy is None:
-                raise RuntimeError("rclpy is required when use_ros=True")
-            self._ros_node = Node("rtde_servo_node")
-            self._logger = self._ros_node.get_logger()
+        self._param_node = None
+        self._logger = logger or logging.getLogger("ur5_pose_tracker")
+        if self._use_ros:
+            self._logger = self.get_logger()
+            self._param_node = self
             self._declare_ros_parameters()
             self._load_ros_parameters()
-            self._ros_node.create_subscription(
+            self.create_subscription(
                 PoseStamped,
                 self._input_topic,
                 self._on_pose_msg,
                 10,
             )
-            self._tcp_pose_publisher = self._ros_node.create_publisher(
+            self._tcp_pose_publisher = self.create_publisher(
                 PoseStamped, "~/tcp_pose", 10
             )
 
@@ -113,37 +107,41 @@ class RTDEServoNode:
             self._rtde_receive = RTDEReceiveInterface(self._robot_ip)
 
     def _declare_ros_parameters(self):
-        self._ros_node.declare_parameter("robot_ip", self._robot_ip)
-        self._ros_node.declare_parameter("input_topic", self._input_topic)
-        self._ros_node.declare_parameter("control_hz", self._control_hz)
-        self._ros_node.declare_parameter(
+        if self._param_node is None:
+            return
+        self._param_node.declare_parameter("robot_ip", self._robot_ip)
+        self._param_node.declare_parameter("input_topic", self._input_topic)
+        self._param_node.declare_parameter("control_hz", self._control_hz)
+        self._param_node.declare_parameter(
             "accepted_frame_ids", sorted(self._accepted_frame_ids)
         )
-        self._ros_node.declare_parameter("pose_timeout_sec", self._pose_timeout_sec)
-        self._ros_node.declare_parameter("servo_speed", self._speed)
-        self._ros_node.declare_parameter("servo_acceleration", self._acceleration)
-        self._ros_node.declare_parameter("servo_lookahead_time", self._lookahead_time)
-        self._ros_node.declare_parameter("servo_gain", self._gain)
+        self._param_node.declare_parameter("pose_timeout_sec", self._pose_timeout_sec)
+        self._param_node.declare_parameter("servo_speed", self._speed)
+        self._param_node.declare_parameter("servo_acceleration", self._acceleration)
+        self._param_node.declare_parameter("servo_lookahead_time", self._lookahead_time)
+        self._param_node.declare_parameter("servo_gain", self._gain)
 
     def _load_ros_parameters(self):
-        self._robot_ip = str(self._ros_node.get_parameter("robot_ip").value)
-        self._input_topic = str(self._ros_node.get_parameter("input_topic").value)
-        self._control_hz = float(self._ros_node.get_parameter("control_hz").value)
-        frames = self._ros_node.get_parameter("accepted_frame_ids").value
+        if self._param_node is None:
+            return
+        self._robot_ip = str(self._param_node.get_parameter("robot_ip").value)
+        self._input_topic = str(self._param_node.get_parameter("input_topic").value)
+        self._control_hz = float(self._param_node.get_parameter("control_hz").value)
+        frames = self._param_node.get_parameter("accepted_frame_ids").value
         self._accepted_frame_ids = {str(frame) for frame in frames if frame}
         if not self._accepted_frame_ids:
             self._accepted_frame_ids = {"base"}
         self._pose_timeout_sec = float(
-            self._ros_node.get_parameter("pose_timeout_sec").value
+            self._param_node.get_parameter("pose_timeout_sec").value
         )
-        self._speed = float(self._ros_node.get_parameter("servo_speed").value)
+        self._speed = float(self._param_node.get_parameter("servo_speed").value)
         self._acceleration = float(
-            self._ros_node.get_parameter("servo_acceleration").value
+            self._param_node.get_parameter("servo_acceleration").value
         )
         self._lookahead_time = float(
-            self._ros_node.get_parameter("servo_lookahead_time").value
+            self._param_node.get_parameter("servo_lookahead_time").value
         )
-        self._gain = float(self._ros_node.get_parameter("servo_gain").value)
+        self._gain = float(self._param_node.get_parameter("servo_gain").value)
         self._dt = 1.0 / self._control_hz
 
     def _on_pose_msg(self, msg):
@@ -185,8 +183,8 @@ class RTDEServoNode:
         )
 
     def _now_ros_time(self):
-        if self._ros_node is not None:
-            return self._ros_node.get_clock().now()
+        if self._use_ros:
+            return self.get_clock().now()
         return _SimpleRosTime()
 
     def _read_actual_tcp_pose(self):
@@ -256,8 +254,8 @@ class RTDEServoNode:
                                 self._latest_target_time = 0.0
 
                 # 主控制数据流 Main control data flow: spin once and send latest target.
-                if self._ros_node is not None and rclpy is not None:
-                    rclpy.spin_once(self._ros_node, timeout_sec=0.0)
+                if self._use_ros and rclpy is not None:
+                    rclpy.spin_once(self, timeout_sec=0.0)
                     if not rclpy.ok():
                         break
 
@@ -314,6 +312,5 @@ def main(args: Optional[list] = None):
     except KeyboardInterrupt:
         node._logger.info("Shutdown requested.")
     finally:
-        if node._ros_node is not None:
-            node._ros_node.destroy_node()
+        node.destroy_node()
         rclpy.shutdown()
