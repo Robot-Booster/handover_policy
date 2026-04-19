@@ -203,6 +203,12 @@ def test_load_ros_parameters_updates_runtime_config():
     dummy_ros_node.set_parameter("servo_acceleration", 0.8)
     dummy_ros_node.set_parameter("servo_lookahead_time", 0.2)
     dummy_ros_node.set_parameter("servo_gain", 350)
+    dummy_ros_node.set_parameter("base_frame", "map")
+    dummy_ros_node.set_parameter("ee_frame", "tool0")
+    dummy_ros_node.set_parameter("camera_frame", "cam")
+    dummy_ros_node.set_parameter("handeye_method", "")
+    dummy_ros_node.set_parameter("handeye_tf.translation", [])
+    dummy_ros_node.set_parameter("handeye_tf.rotation", [])
 
     node._load_ros_parameters()
 
@@ -215,6 +221,8 @@ def test_load_ros_parameters_updates_runtime_config():
     assert node._acceleration == pytest.approx(0.8)
     assert node._lookahead_time == pytest.approx(0.2)
     assert node._gain == pytest.approx(350.0)
+    assert node._base_frame == "map"
+    assert node._tcp_pose_frame_id == "map"
 
 
 def test_publish_tcp_pose_success_path(monkeypatch):
@@ -295,6 +303,27 @@ def test_run_control_loop_publishes_tcp_pose_every_step(monkeypatch):
     node.run_control_loop(max_steps=3)
 
     assert publish_count["value"] == 3
+
+
+def test_rotmat_to_quat_identity():
+    q = RTDEServoNode._rotmat_to_quat_xyzw([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    assert q[0] == pytest.approx(0.0)
+    assert q[1] == pytest.approx(0.0)
+    assert q[2] == pytest.approx(0.0)
+    assert q[3] == pytest.approx(1.0)
+
+
+def test_parse_handeye_empty_method_warns():
+    logger = _DummyLogger()
+    node = RTDEServoNode(
+        accepted_frame_ids=["base_link"],
+        rtde_control=_DummyControl(),
+        rtde_receive=_DummyReceive(),
+        logger=logger,
+    )
+    out = node._parse_handeye_static("")
+    assert out == (None, None, None, None)
+    assert any("handeye_method not set" in w for w in logger.warnings)
 
 
 def test_rotvec_to_quat_zero_rotation():

@@ -1,16 +1,28 @@
 ur5_pose_tracker:
   ros__parameters:
-    # 主数据流参数 / Main dataflow parameters.
+    # 主数据流参数
     robot_ip: "192.168.0.199"
     input_topic: "~/ur_target_pose"
     control_hz: 20.0
     accepted_frame_ids: ["base_link"]
     pose_timeout_sec: 0.5
 
-    # 伺服参数 / Servo parameters.
-    # 这两个参数只会在平滑停机时生效，其他时候通过 control_hz、servo_lookahead_time、servo_gain 来控制。
+    # 伺服参数
+    # 这两个参数只会在平滑停机时生效，其他时候通过 control_hz、servo_lookahead_time、servo_gain 来控制
     servo_speed: 0.6
     servo_acceleration: 0.2
 
     servo_lookahead_time: 0.1
     servo_gain: 100
+
+    handeye_method: "eye_on_hand"
+    ee_frame: "tool0"
+    base_frame: "base_link"
+    camera_frame: "d455_link"
+
+    handeye_tf:
+      translation: [0.04814380664567837, 0.0588777676781267, -0.14815378397833917]
+
+      rotation: [0.004732823019748089, 0.9999722019734409, 0.005761568072286449,
+                 0.002890173778031635, -0.005775287144614283, 0.9999791462595256,
+                 0.9999846235226801, -0.0047160723897221035, -0.0029174268488477706]

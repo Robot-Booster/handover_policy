@@ -1,11 +1,13 @@
 import math
 import threading
 import time
-from typing import Optional
+from typing import Any, List, Optional, Sequence, Tuple
 
 import rclpy
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
 from rclpy.node import Node
+from rclpy.parameter import Parameter
+from tf2_ros import StaticTransformBroadcaster, TransformBroadcaster
 from rtde_control import RTDEControlInterface
 from rtde_receive import RTDEReceiveInterface
 
@@ -50,6 +52,11 @@ class RTDEServoNode(Node):
         self._running = True
         self._tcp_pose_frame_id = "base_link"
         self._tcp_pose_publisher = None
+        self._base_frame = "base_link"
+        self._ee_frame = "tool0"
+        self._camera_frame = ""
+        self._tf_broadcaster = None
+        self._static_tf_broadcaster = None
 
         self._param_node = self
         # 日志 Logger: 单测注入 logger；运行时用 ROS logger（终端 / rosout）。
@@ -63,6 +70,8 @@ class RTDEServoNode(Node):
             f"control_hz={self._control_hz}, "
             f"accepted_frame_ids={sorted(self._accepted_frame_ids)}, "
             f"pose_timeout_sec={self._pose_timeout_sec}, "
+            f"base_frame={self._base_frame}, ee_frame={self._ee_frame}, "
+            f"camera_frame={self._camera_frame}, "
             f"servo_speed={self._speed}, "
             f"servo_acceleration={self._acceleration}, "
             f"servo_lookahead_time={self._lookahead_time}, "
@@ -84,6 +93,8 @@ class RTDEServoNode(Node):
         self._tcp_pose_publisher = self.create_publisher(
             PoseStamped, "~/tcp_pose", 10
         )
+
+        self._setup_tf()
 
         self._rtde_control = rtde_control
         if self._rtde_control is None:
@@ -113,6 +124,15 @@ class RTDEServoNode(Node):
         self._param_node.declare_parameter("servo_acceleration", self._acceleration)
         self._param_node.declare_parameter("servo_lookahead_time", self._lookahead_time)
         self._param_node.declare_parameter("servo_gain", int(self._gain))
+        self._param_node.declare_parameter("base_frame", self._base_frame)
+        self._param_node.declare_parameter("ee_frame", self._ee_frame)
+        self._param_node.declare_parameter("camera_frame", self._camera_frame)
+        self._param_node.declare_parameter("handeye_method", "")
+        # 不能 declare(..., [])：rclpy 会用 from_parameter_value([]) 覆盖类型为 BYTE_ARRAY。
+        self._param_node.declare_parameter(
+            "handeye_tf.translation", Parameter.Type.DOUBLE_ARRAY
+        )
+        self._param_node.declare_parameter("handeye_tf.rotation", Parameter.Type.DOUBLE_ARRAY)
 
     def _load_ros_parameters(self):
         if self._param_node is None:
@@ -136,6 +156,178 @@ class RTDEServoNode(Node):
         )
         self._gain = float(self._param_node.get_parameter("servo_gain").value)
         self._dt = 1.0 / self._control_hz
+        self._base_frame = str(self._param_node.get_parameter("base_frame").value)
+        self._ee_frame = str(self._param_node.get_parameter("ee_frame").value)
+        self._camera_frame = str(self._param_node.get_parameter("camera_frame").value)
+        self._tcp_pose_frame_id = self._base_frame
+
+    def _setup_tf(self):
+        """TF 广播：动态 base→ee；手眼静态在参数合法时发送一次。"""
+        self._tf_broadcaster = TransformBroadcaster(self)
+        self._static_tf_broadcaster = StaticTransformBroadcaster(self)
+        method = ""
+        if self._param_node is not None:
+            method = str(self._param_node.get_parameter("handeye_method").value)
+        tvec, rmat, parent, child = self._parse_handeye_static(method)
+        if tvec is None:
+            self._logger.info(
+                "TF: no static hand-eye on /tf_static (see WARN above if any). "
+                "Dynamic /tf (base->ee) only after RTDE TCP pose reads succeed."
+            )
+            return
+        st = TransformStamped()
+        st.header.stamp = self._now_ros_time().to_msg()
+        st.header.frame_id = parent
+        st.child_frame_id = child
+        st.transform.translation.x = float(tvec[0])
+        st.transform.translation.y = float(tvec[1])
+        st.transform.translation.z = float(tvec[2])
+        qx, qy, qz, qw = self._rotmat_to_quat_xyzw(rmat)
+        st.transform.rotation.x = qx
+        st.transform.rotation.y = qy
+        st.transform.rotation.z = qz
+        st.transform.rotation.w = qw
+        # tf2_ros API: list form；/tf_static 为 TRANSIENT_LOCAL，晚订阅的节点仍可收到。
+        self._static_tf_broadcaster.sendTransform([st])
+        self._logger.info(
+            f"TF: published static transform {parent} -> {child} on /tf_static"
+        )
+
+    def _parse_handeye_static(
+        self, method: str
+    ) -> Tuple[
+        Optional[Sequence[float]],
+        Optional[List[List[float]]],
+        Optional[str],
+        Optional[str],
+    ]:
+        """解析手眼静态 TF；失败则 WARN 并返回全 None。"""
+        if self._param_node is None:
+            self._logger.warning("Hand-eye static TF skipped: no parameter node.")
+            return None, None, None, None
+        raw_t = self._param_node.get_parameter("handeye_tf.translation").value
+        raw_r = self._param_node.get_parameter("handeye_tf.rotation").value
+        tvec = self._coerce_translation(raw_t)
+        rmat = self._coerce_rotation_matrix(raw_r)
+        if tvec is None or rmat is None:
+            self._logger.warning(
+                "Hand-eye static TF skipped: invalid or missing handeye_tf.translation / "
+                "handeye_tf.rotation (translation: length 3; rotation: 9 floats row-major)."
+            )
+            return None, None, None, None
+        m = method.strip()
+        if not m:
+            self._logger.warning("Hand-eye static TF skipped: handeye_method not set.")
+            return None, None, None, None
+        if m == "eye_on_hand":
+            if not str(self._ee_frame).strip():
+                self._logger.warning(
+                    "Hand-eye static TF skipped: ee_frame is empty for eye_on_hand."
+                )
+                return None, None, None, None
+            if not str(self._camera_frame).strip():
+                self._logger.warning(
+                    "Hand-eye static TF skipped: camera_frame is empty for eye_on_hand."
+                )
+                return None, None, None, None
+            return tvec, rmat, self._ee_frame, self._camera_frame
+        if m == "eye_on_base":
+            if not str(self._base_frame).strip():
+                self._logger.warning(
+                    "Hand-eye static TF skipped: base_frame is empty for eye_on_base."
+                )
+                return None, None, None, None
+            if not str(self._camera_frame).strip():
+                self._logger.warning(
+                    "Hand-eye static TF skipped: camera_frame is empty for eye_on_base."
+                )
+                return None, None, None, None
+            return tvec, rmat, self._base_frame, self._camera_frame
+        self._logger.warning(
+            f"Hand-eye static TF skipped: unknown handeye_method={method!r} "
+            '(expected "eye_on_hand" or "eye_on_base").'
+        )
+        return None, None, None, None
+
+    def _coerce_translation(self, raw: Any) -> Optional[Tuple[float, float, float]]:
+        if raw is None:
+            return None
+        if not isinstance(raw, (list, tuple)) or len(raw) != 3:
+            return None
+        try:
+            return (float(raw[0]), float(raw[1]), float(raw[2]))
+        except (TypeError, ValueError):
+            return None
+
+    def _coerce_rotation_matrix(self, raw: Any) -> Optional[List[List[float]]]:
+        if raw is None:
+            return None
+        if not isinstance(raw, (list, tuple)) or len(raw) != 9:
+            return None
+        try:
+            v = [float(raw[i]) for i in range(9)]
+        except (TypeError, ValueError, IndexError):
+            return None
+        return [
+            [v[0], v[1], v[2]],
+            [v[3], v[4], v[5]],
+            [v[6], v[7], v[8]],
+        ]
+
+    @staticmethod
+    def _rotmat_to_quat_xyzw(r: List[List[float]]) -> Tuple[float, float, float, float]:
+        """旋转矩阵 → 四元数 xyzw（行主序）。"""
+        m00, m01, m02 = r[0]
+        m10, m11, m12 = r[1]
+        m20, m21, m22 = r[2]
+        tr = m00 + m11 + m22
+        if tr > 0.0:
+            s = 0.5 / math.sqrt(tr + 1.0)
+            qw = 0.25 / s
+            qx = (m21 - m12) * s
+            qy = (m02 - m20) * s
+            qz = (m10 - m01) * s
+        elif m00 > m11 and m00 > m22:
+            s = 2.0 * math.sqrt(1.0 + m00 - m11 - m22)
+            qw = (m21 - m12) / s
+            qx = 0.25 * s
+            qy = (m01 + m10) / s
+            qz = (m02 + m20) / s
+        elif m11 > m22:
+            s = 2.0 * math.sqrt(1.0 + m11 - m00 - m22)
+            qw = (m02 - m20) / s
+            qx = (m01 + m10) / s
+            qy = 0.25 * s
+            qz = (m12 + m21) / s
+        else:
+            s = 2.0 * math.sqrt(1.0 + m22 - m00 - m11)
+            qw = (m10 - m01) / s
+            qx = (m02 + m20) / s
+            qy = (m12 + m21) / s
+            qz = 0.25 * s
+        n = math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
+        if n <= 0.0:
+            return 0.0, 0.0, 0.0, 1.0
+        return qx / n, qy / n, qz / n, qw / n
+
+    def _publish_dynamic_base_to_ee(self, tcp_pose):
+        if self._tf_broadcaster is None:
+            return
+        t = TransformStamped()
+        t.header.stamp = self._now_ros_time().to_msg()
+        t.header.frame_id = self._base_frame
+        t.child_frame_id = self._ee_frame
+        t.transform.translation.x = float(tcp_pose[0])
+        t.transform.translation.y = float(tcp_pose[1])
+        t.transform.translation.z = float(tcp_pose[2])
+        qx, qy, qz, qw = self._rotvec_to_quat(
+            float(tcp_pose[3]), float(tcp_pose[4]), float(tcp_pose[5])
+        )
+        t.transform.rotation.x = qx
+        t.transform.rotation.y = qy
+        t.transform.rotation.z = qz
+        t.transform.rotation.w = qw
+        self._tf_broadcaster.sendTransform([t])
 
     def _on_pose_msg(self, msg):
         if not self._validate_frame(msg.header.frame_id):
@@ -218,6 +410,7 @@ class RTDEServoNode(Node):
             tcp_pose = self._read_actual_tcp_pose()
             msg = self._build_tcp_pose_msg(tcp_pose)
             self._tcp_pose_publisher.publish(msg)
+            self._publish_dynamic_base_to_ee(tcp_pose)
         except Exception as exc:
             self._logger.warning(f"Failed to read tcp pose: {exc}")
 
