@@ -1,9 +1,0 @@
-/**:
-  ros__parameters:
-    model_path: "/home/ender/handover_baseline/src/hand_detector/weights/best.pt"
-    label: "onlyhand"
-    device: "cuda:1"
-    confidence: 0.7
-    imgsz: 640
-    max_det: 2
-    retina_masks: true

@@ -1,3 +1,3 @@
-[submodule "thirdparty/HaWoR"]
-	path = thirdparty/HaWoR
-	url = https://github.com/ThunderVVV/HaWoR.git
+[submodule "thirdparty/Fast-FoundationStereo"]
+	path = thirdparty/Fast-FoundationStereo
+	url = https://github.com/NVlabs/Fast-FoundationStereo.git
