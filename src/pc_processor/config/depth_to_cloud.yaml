@@ -1,0 +1,12 @@
+depth_to_cloud_node:
+  ros__parameters:
+    depth_topic: "/camera/depth/image_rect"
+    depth_camera_info_topic: "/camera/depth/camera_info"
+    mask_topic: ""
+    mask_camera_info_topic: ""
+    undistort_mask_enabled: true
+    cloud_topic: "~/pointcloud"
+    align_frame: ""
+    roi_mask_image_path: ""
+    heatmap_min_depth_m: 0.1
+    heatmap_max_depth_m: 2.0
