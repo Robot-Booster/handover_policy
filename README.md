@@ -18,12 +18,12 @@
 
 ## 演示视频
 
-- RViz 视角演示：`docs/video/rivz.mp4`
-- 跟踪流程演示：`docs/video/track_demo_compressed.mp4`
+- RViz 视角演示：`docs/video/rivz_light.gif`
+- 跟踪流程演示：`docs/video/track_demo_light.gif`
 
-<video src="docs/video/rivz.mp4" controls muted playsinline width="720"></video>
+![RViz 演示](docs/video/rivz_light.gif)
 
-<video src="docs/video/track_demo_compressed.mp4" controls muted playsinline width="720"></video>
+![跟踪流程演示](docs/video/track_demo_light.gif)
 
 ## 子功能包
 
