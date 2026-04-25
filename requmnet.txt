@@ -1,0 +1,17 @@
+# Python version
+# Current project recommendation: Python 3.10.x
+
+# Core packaging
+setuptools>=65
+
+# Numeric / vision
+numpy==1.26.*
+opencv-python>=4.8
+
+# Model/runtime
+# torch needs environment-specific installation (CPU/CUDA version must match your machine).
+# Please install torch manually according to your own runtime configuration.
+# torch>=2.0
+ultralytics>=8.0
+omegaconf>=2.3
+ur-rtde>=1.5
