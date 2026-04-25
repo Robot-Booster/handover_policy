@@ -1,18 +1,18 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>ur5_pose_tracker</name>
+  <name>motion_state_estimator</name>
   <version>0.0.0</version>
-  <description>UR5 pose tracker package skeleton.</description>
+  <description>Motion state estimator package skeleton.</description>
   <maintainer email="ender@example.com">ender</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
-  <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>ur_rtde</exec_depend>
 
   <test_depend>ament_pytest</test_depend>
 

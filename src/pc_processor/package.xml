@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>pc_processor</name>
-  <version>0.0.0</version>
-  <description>Depth 32FC1 to xyzrgb point cloud processor.</description>
+  <version>0.1.0</version>
+  <description>Depth + seg mask to held-object point cloud (single-node, OpenMP-accelerated).</description>
   <maintainer email="ender@example.com">ender</maintainer>
   <license>Apache-2.0</license>
 
@@ -11,11 +11,14 @@
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>visualization_msgs</depend>
   <depend>message_filters</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>opencv</depend>
+  <depend>eigen</depend>
+  <depend>nlohmann-json-dev</depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 

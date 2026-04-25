@@ -1,56 +1,57 @@
 # pc_processor
 
-`pc_processor` is a ROS 2 `ament_cmake` C++ package that converts depth image (`32FC1`) + `CameraInfo` into `xyzrgb` point cloud.
+`pc_processor` is a single-node ROS 2 (`ament_cmake`) package that runs the full depth-to-held-object pipeline in one OpenMP-accelerated process.
 
 ## Pipeline
 
-Main data flow:
+Per-frame main data flow:
 
-1. `roi`: apply optional fixed `mono8` roi image on depth (`0` invalid, `>0` keep).
-2. `project`: depth + camera intrinsics -> xyz.
-3. `align`: transform xyz to `align_frame` via tf2 when `align_frame` is not empty.
-4. `mask`: apply optional `mono8` mask topic.
-5. `colorize`: generate depth heatmap rgb.
-6. `publish`: publish `sensor_msgs/msg/PointCloud2` (`xyzrgb`).
+1. **Fused projection** (OpenMP parallel): `depth(32FC1) + seg_mask(mono8) + roi_mask(static PNG) + OBB workspace` → compact `Point[]` with `is_target` flag.
+2. **Voxel hash** (single pass): accumulate per-voxel `sum_xyz / count / target_points`.
+3. **ROR (voxel-level)**: drop voxels with < `ror_min_neighbors` neighbors in 26-connectivity.
+4. **Cluster (voxel-level)**: 26-connected Union-Find on target voxels and other voxels separately; filter by `cluster_min_voxels`.
+5. **Adjacency + selection**: for each target cluster, find its adjacent other clusters; globally pick the single biggest adjacent other cluster as the final held object.
+6. **TF** to `target_frame`, **paint** uniform `output_rgb`, **publish**:
+   - `cloud_topic` as `sensor_msgs/PointCloud2 (xyzrgb)`
+   - `centroid_topic` as `geometry_msgs/PointStamped` (weighted centroid)
 
-If mask frame is not equal to final cloud frame, node prints warning and skips mask for that frame only.
+Frames where nothing is selected publish neither topic.
 
-## Parameters
+## Parameters (YAML only unless noted)
 
-- `depth_topic` (string, default: `~/depth`)
-- `depth_camera_info_topic` (string, default: `~/depth_camera_info`)
-- `mask_topic` (string, default: ``)
-- `mask_camera_info_topic` (string, default: ``, enable mask reprojection when set)
-- `undistort_mask_enabled` (bool, default: `true`, yaml-only)
-  - If enabled, `mask_camera_info_topic` must not be empty.
-  - Only `plumb_bob` distortion model is supported.
-  - If mask camera distortion coefficients are all zero, node prints one warning.
-- `cloud_topic` (string, default: `~/pointcloud`)
-- `align_frame` (string, default: ``)
-- `roi_mask_image_path` (string, default: ``, yaml-only)
-- `heatmap_min_depth_m` (double, default: `0.1`)
-- `heatmap_max_depth_m` (double, default: `2.0`)
+Topics (CLI-overridable via launch):
+- `depth_topic`, `depth_camera_info_topic`, `seg_mask_topic`, `cloud_topic`, `centroid_topic`
 
-Node prints all parameter values with `INFO` log at startup.
+Frames (CLI-overridable):
+- `target_frame` (empty → stay in depth frame)
+
+Static resources (YAML only):
+- `roi_mask_image_path`
+- `workspace_box_json_path` (`pc_mask_box.json` schema)
+
+Sync (YAML only):
+- `depth_mask_max_stamp_diff_sec` (default `0.05`)
+- `allow_future_mask` (default `false`)
+
+Filtering (YAML only):
+- `voxel_leaf_size_m` (default `0.005`)
+- `ror_min_neighbors` (default `5`, max `26`)
+- `cluster_min_voxels` (default `20`)
+- `output_rgb` (3× uint8, default `[255, 0, 0]`)
 
 ## Launch
 
-Use:
-
 ```bash
-ros2 launch pc_processor depth_to_cloud.launch.py
+ros2 launch pc_processor perception.launch.py \
+  namespace:=d455 \
+  config_file:=/home/ender/handover_baseline/src/pc_processor/config/d455_perception.yaml
 ```
 
-Launch file supports overriding only:
+Launch arguments (empty string = keep YAML value):
 
-- `config_file`
-- `namespace`
-- `depth_topic`
-- `depth_camera_info_topic`
-- `mask_topic`
-- `mask_camera_info_topic`
-- `cloud_topic`
-- `align_frame`
+- `config_file`, `namespace`
+- `depth_topic`, `depth_camera_info_topic`, `seg_mask_topic`
+- `cloud_topic`, `centroid_topic`
+- `target_frame`
 
-Heatmap range is configured in yaml and not exposed for launch override.
-ROI image path is configured in yaml and not exposed for launch override.
+All filter/sync/static-resource parameters are YAML-only; CLI cannot change them.
