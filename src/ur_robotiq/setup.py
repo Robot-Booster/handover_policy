@@ -3,7 +3,7 @@ from glob import glob
 
 from setuptools import find_packages, setup
 
-package_name = "ur5_pose_tracker"
+package_name = "ur_robotiq"
 
 setup(
     name=package_name,
@@ -24,7 +24,7 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "pose_tracker_node = ur5_pose_tracker.pose_tracker_node:main",
+            "pose_tracker_node = ur_robotiq.pose_tracker_node:main",
         ]
     },
 )

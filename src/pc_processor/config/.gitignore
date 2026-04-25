@@ -1,3 +1,4 @@
 /*.yaml
-!/depth_to_cloud.yaml
+!/perception.yaml
 /*.png
+/*.json

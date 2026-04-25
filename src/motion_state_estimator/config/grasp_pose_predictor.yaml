@@ -1,0 +1,20 @@
+/**:
+  ros__parameters:
+    input_point_topic: "/d455/perception_node/target_centroid"
+    input_tcp_pose_topic: "/ur_robotiq/tcp_pose"
+    output_grasp_pose_topic: "/ur_robotiq/ur_target_pose"
+    output_debug_point_topic: "~/target_debug_point"
+    workspace_marker_topic: "~/workspace_marker"
+    base_frame: "base_link"
+    ee_frame: "finger_tip"
+    output_frame_id: "base_link"
+    update_hz: 20.0
+    process_noise_pos: 1.0e-4
+    process_noise_vel: 1.0e-2
+    measure_noise_pos: 1.0e-3
+    feedforward_sec: 0.2
+    lost_timeout_sec: 0.2
+    tcp_z_offset_m: -0.2
+    enable_debug_point: true
+    workspace_box_json_path: "/home/ender/handover_baseline/src/motion_state_estimator/config/pc_mask_box.json"
+    workspace_marker_rgba: [0.0, 0.0, 1.0, 0.25]

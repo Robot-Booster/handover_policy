@@ -23,7 +23,7 @@ log/
 /docs/superpowers/
 
 # --- Git worktree 附加检出目录 ---
-/.worktree/
+/.worktrees/
 
 # --- IDE / OS ---
 .idea/

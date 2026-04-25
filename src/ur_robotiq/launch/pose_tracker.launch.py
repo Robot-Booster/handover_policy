@@ -13,7 +13,7 @@ def generate_launch_description():
     params_file_arg = DeclareLaunchArgument(
         "params_file",
         default_value=PathJoinSubstitution(
-            [FindPackageShare("ur5_pose_tracker"), "config", "pose_tracker.yaml"]
+            [FindPackageShare("ur_robotiq"), "config", "pose_tracker.yaml"]
         ),
         description="Path to the pose tracker parameter file.",
     )
@@ -29,9 +29,9 @@ def generate_launch_description():
     )
 
     pose_tracker_node = Node(
-        package="ur5_pose_tracker",
+        package="ur_robotiq",
         executable=node_executable,
-        name="ur5_pose_tracker",
+        name="ur_robotiq",
         output="screen",
         parameters=[params_file],
         remappings=[("~/ur_target_pose", input_topic)],

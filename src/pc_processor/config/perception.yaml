@@ -1,0 +1,33 @@
+/**:
+  ros__parameters:
+    # topics
+    depth_topic: "~/depth"
+    depth_camera_info_topic: "~/depth_camera_info"
+    seg_mask_topic: "~/seg_mask"
+    cloud_topic: "~/pointcloud"
+    centroid_topic: "~/target_centroid"
+    workspace_marker_topic: "~/workspace_marker"
+
+    # frames
+    target_frame: "base_link"
+
+    # static resources (must be absolute paths)
+    roi_mask_image_path: ""
+    workspace_box_json_path: ""
+
+    # sync
+    depth_mask_max_stamp_diff_sec: 0.05
+    allow_future_mask: false
+
+    # voxel
+    voxel_leaf_size_m: 0.005
+
+    # ROR (voxel-level)
+    ror_min_neighbors: 5
+
+    # cluster (voxel-level)
+    cluster_min_voxels: 20
+
+    # output color (uint8 RGB)
+    output_rgb: [255, 0, 0]
+    workspace_marker_rgba: [0.0, 1.0, 1.0, 0.25]
