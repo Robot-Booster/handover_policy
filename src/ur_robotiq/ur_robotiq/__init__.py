@@ -1,3 +1,3 @@
-from ur_robotiq.pose_tracker_node import RTDEServoNode, main
+from ur_robotiq.control import RTDEServoNode, main
 
 __all__ = ["RTDEServoNode", "main"]

@@ -13,7 +13,7 @@ def generate_launch_description():
     params_file_arg = DeclareLaunchArgument(
         "params_file",
         default_value=PathJoinSubstitution(
-            [FindPackageShare("ur_robotiq"), "config", "pose_tracker.yaml"]
+            [FindPackageShare("ur_robotiq"), "config", "robot_config.yaml"]
         ),
         description="Path to the pose tracker parameter file.",
     )

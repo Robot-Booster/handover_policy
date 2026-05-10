@@ -66,7 +66,7 @@ source install/setup.bash
 ros2 launch realsense2_camera rs_launch.py config_file:=/path/to/d455.yaml camera_name:=d455
 
 # 2. 机械臂状态/控制节点
-ros2 launch ur_robotiq pose_tracker.launch.py params_file:=/home/ender/handover_baseline/src/ur_robotiq/config/pose_tracker.yaml
+ros2 launch ur_robotiq pose_tracker.launch.py params_file:=/home/ender/handover_baseline/src/ur_robotiq/config/robot_config.yaml
 
 # 3. 双目深度
 ros2 launch fastfoundation launch_fastfoundation.launch.py \
@@ -85,8 +85,8 @@ ros2 launch pc_processor perception.launch.py \
   config_file:=/home/ender/handover_baseline/src/pc_processor/config/d455_perception.yaml
 
 # 6. 抓取位姿估计
-ros2 launch motion_state_estimator grasp_pose_predictor.launch.py \
-  config_file:=/home/ender/handover_baseline/src/motion_state_estimator/config/grasp_pose_predictor.yaml
+ros2 launch handover_task base_policy.launch.py \
+  config_file:=/home/ender/handover_baseline/src/handover_task/config/base_policy.yaml
 ```
 
 ### 5) 机械臂适配注意事项（重要）

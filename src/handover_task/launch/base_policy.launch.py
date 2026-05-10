@@ -15,15 +15,12 @@ def _build_optional_remap(src_name, cli_value):
 def _build_node(context):
     config_file = LaunchConfiguration("config_file")
     namespace = LaunchConfiguration("namespace").perform(context)
-
     topic_specs = [
         ("input_point_topic", "~/target_point"),
         ("input_tcp_pose_topic", "~/tcp_pose"),
         ("output_grasp_pose_topic", "~/grasp_pose"),
-        ("output_debug_point_topic", "~/debug_point"),
         ("workspace_marker_topic", "~/workspace_marker"),
     ]
-
     remappings = []
     overrides = {}
     for arg_name, src_name in topic_specs:
@@ -35,9 +32,9 @@ def _build_node(context):
 
     return [
         Node(
-            package="motion_state_estimator",
-            executable="grasp_pose_predictor_node",
-            name="grasp_pose_predictor",
+            package="handover_task",
+            executable="base_policy",
+            name="base_policy",
             namespace=namespace,
             output="screen",
             parameters=[config_file, overrides],
@@ -54,17 +51,16 @@ def generate_launch_description():
                 "config_file",
                 default_value=PathJoinSubstitution(
                     [
-                        FindPackageShare("motion_state_estimator"),
+                        FindPackageShare("handover_task"),
                         "config",
-                        "grasp_pose_predictor.yaml",
+                        "base_policy.yaml",
                     ]
                 ),
-                description="Path to grasp pose predictor parameter file.",
+                description="Path to base policy parameter file.",
             ),
             DeclareLaunchArgument("input_point_topic", default_value=""),
             DeclareLaunchArgument("input_tcp_pose_topic", default_value=""),
             DeclareLaunchArgument("output_grasp_pose_topic", default_value=""),
-            DeclareLaunchArgument("output_debug_point_topic", default_value=""),
             DeclareLaunchArgument("workspace_marker_topic", default_value=""),
             OpaqueFunction(function=_build_node),
         ]

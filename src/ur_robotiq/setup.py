@@ -21,10 +21,9 @@ setup(
     maintainer_email="ender@example.com",
     description="UR5 pose tracker package skeleton.",
     license="Apache-2.0",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "pose_tracker_node = ur_robotiq.pose_tracker_node:main",
+            "pose_tracker_node = ur_robotiq.control:main",
         ]
     },
 )

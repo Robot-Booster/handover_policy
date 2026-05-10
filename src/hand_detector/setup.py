@@ -21,7 +21,6 @@ setup(
     maintainer_email="ender@example.com",
     description="Lightweight hand mask detector with YOLOE.",
     license="Apache-2.0",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "hand_detector_node = hand_detector.hand_detector_node:main",

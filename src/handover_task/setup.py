@@ -3,7 +3,7 @@ from glob import glob
 
 from setuptools import find_packages, setup
 
-package_name = "motion_state_estimator"
+package_name = "handover_task"
 
 setup(
     name=package_name,
@@ -20,12 +20,11 @@ setup(
     zip_safe=True,
     maintainer="ender",
     maintainer_email="ender@example.com",
-    description="Motion state estimator package skeleton.",
+    description="Single-node handover task policy package.",
     license="Apache-2.0",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "grasp_pose_predictor_node = motion_state_estimator.grasp_pose_predictor_node:main",
+            "base_policy = handover_task.base_policy:main",
         ]
     },
 )

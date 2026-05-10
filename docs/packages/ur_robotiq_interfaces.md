@@ -8,7 +8,7 @@
 
 ## 数据流
 
-1. 上层节点（如 `motion_state_estimator` 后续执行逻辑）可通过服务调用控制执行层。
+1. 上层节点（如 `handover_task/base_policy`）可通过服务调用控制执行层。
 2. `MoveToPose.srv`：
    - 请求：`geometry_msgs/PoseStamped target`
    - 响应：`success + message`

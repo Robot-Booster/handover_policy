@@ -76,8 +76,6 @@ class RTDEServoNode(Node):
         self._gripper_com_port = ""
         self._gripper_speed = 255
         self._gripper_force = 255
-        self._move_l_speed = 0.2
-        self._move_l_acceleration = 0.2
 
         self._param_node = self
         self._logger = logger if logger is not None else self.get_logger()
@@ -89,13 +87,8 @@ class RTDEServoNode(Node):
             f"control_hz={self._control_hz}, accepted_frame_ids={sorted(self._accepted_frame_ids)}, "
             f"pose_timeout_sec={self._pose_timeout_sec}, base_frame={self._base_frame}, "
             f"ee_frame={self._ee_frame}, camera_frame={self._camera_frame}, "
-            f"servo_speed={self._speed}, servo_acceleration={self._acceleration}, "
+            f"speed={self._speed}, acceleration={self._acceleration}, "
             f"servo_lookahead_time={self._lookahead_time}, servo_gain={self._gain}"
-        )
-        self._logger.warning(
-            "ur_rtde.servoL ignores servo_speed and servo_acceleration during motion "
-            "(upstream API); tune control_hz, servo_lookahead_time, servo_gain. "
-            "servo_acceleration is applied as tool deceleration [m/s^2] in servoStop()."
         )
         self._logger.info(f"Connecting robot RTDE interfaces: ip={self._robot_ip}")
         self.create_subscription(PoseStamped, self._input_topic, self._on_pose_msg, 1)
@@ -116,15 +109,13 @@ class RTDEServoNode(Node):
         self._param_node.declare_parameter("control_hz", self._control_hz)
         self._param_node.declare_parameter("accepted_frame_ids", sorted(self._accepted_frame_ids))
         self._param_node.declare_parameter("pose_timeout_sec", self._pose_timeout_sec)
-        self._param_node.declare_parameter("servo_speed", self._speed)
-        self._param_node.declare_parameter("servo_acceleration", self._acceleration)
+        self._param_node.declare_parameter("speed", self._speed)
+        self._param_node.declare_parameter("acceleration", self._acceleration)
         self._param_node.declare_parameter("servo_lookahead_time", self._lookahead_time)
         self._param_node.declare_parameter("servo_gain", int(self._gain))
         self._param_node.declare_parameter("base_frame", self._base_frame)
         self._param_node.declare_parameter("ee_frame", self._ee_frame)
         self._param_node.declare_parameter("camera_frame", self._camera_frame)
-        self._param_node.declare_parameter("move_l_speed", self._move_l_speed)
-        self._param_node.declare_parameter("move_l_acceleration", self._move_l_acceleration)
         self._param_node.declare_parameter("gripper_com_port", self._gripper_com_port)
         self._param_node.declare_parameter("gripper_speed", int(self._gripper_speed))
         self._param_node.declare_parameter("gripper_force", int(self._gripper_force))
@@ -140,16 +131,14 @@ class RTDEServoNode(Node):
             str(frame) for frame in self._param_node.get_parameter("accepted_frame_ids").value if frame
         } or {"base_link"}
         self._pose_timeout_sec = float(self._param_node.get_parameter("pose_timeout_sec").value)
-        self._speed = float(self._param_node.get_parameter("servo_speed").value)
-        self._acceleration = float(self._param_node.get_parameter("servo_acceleration").value)
+        self._speed = float(self._param_node.get_parameter("speed").value)
+        self._acceleration = float(self._param_node.get_parameter("acceleration").value)
         self._lookahead_time = float(self._param_node.get_parameter("servo_lookahead_time").value)
         self._gain = float(self._param_node.get_parameter("servo_gain").value)
         self._dt = 1.0 / self._control_hz
         self._base_frame = str(self._param_node.get_parameter("base_frame").value)
         self._ee_frame = str(self._param_node.get_parameter("ee_frame").value)
         self._camera_frame = str(self._param_node.get_parameter("camera_frame").value)
-        self._move_l_speed = float(self._param_node.get_parameter("move_l_speed").value)
-        self._move_l_acceleration = float(self._param_node.get_parameter("move_l_acceleration").value)
         self._gripper_com_port = str(self._param_node.get_parameter("gripper_com_port").value)
         self._gripper_speed = int(self._param_node.get_parameter("gripper_speed").value)
         self._gripper_force = int(self._param_node.get_parameter("gripper_force").value)
@@ -317,7 +306,7 @@ class RTDEServoNode(Node):
                 self._control_mode = "SERVO"
 
     def _execute_movel(self, target):
-        self._rtde_control.moveL(target, self._move_l_speed, self._move_l_acceleration)
+        self._rtde_control.moveL(target, self._speed, self._acceleration)
 
     def _handle_move_l(self, request, response):
         if not self._validate_frame(request.target.header.frame_id):

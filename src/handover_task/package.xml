@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>motion_state_estimator</name>
+  <name>handover_task</name>
   <version>0.0.0</version>
-  <description>Motion state estimator package skeleton.</description>
+  <description>Single-node base policy for handover task.</description>
   <maintainer email="ender@example.com">ender</maintainer>
   <license>Apache-2.0</license>
 
@@ -13,6 +13,8 @@
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
+  <exec_depend>ur_robotiq_interfaces</exec_depend>
+  <exec_depend>handover_task_interfaces</exec_depend>
 
   <test_depend>ament_pytest</test_depend>
 
