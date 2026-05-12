@@ -1,4 +1,4 @@
-#include "camera/preprocess_node.hpp"
+#include "camera/camera_preprocess_node.hpp"
 
 #include <opencv2/core.hpp>
 
@@ -26,14 +26,16 @@ std::string trim(std::string s)
 
 }  // namespace
 
-std::string PreprocessNode::resolveTopic(const std::string & raw, const std::string & default_value)
+std::string CameraPreprocessNode::resolveTopic(
+  const std::string & raw,
+  const std::string & default_value)
 {
   const std::string t = trim(raw);
   return t.empty() ? default_value : t;
 }
 
-PreprocessNode::PreprocessNode(const rclcpp::NodeOptions & options)
-: rclcpp::Node("preprocess_node", options)
+CameraPreprocessNode::CameraPreprocessNode(const rclcpp::NodeOptions & options)
+: rclcpp::Node("camera_pre_node", options)
 {
   declare_parameter<std::string>("image_topic", kDefaultImageTopic);
   declare_parameter<std::string>("camera_info_topic", kDefaultCameraInfoTopic);
@@ -54,19 +56,19 @@ PreprocessNode::PreprocessNode(const rclcpp::NodeOptions & options)
   camera_info_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(
     camera_info_topic_,
     qos,
-    std::bind(&PreprocessNode::onCameraInfo, this, std::placeholders::_1));
+    std::bind(&CameraPreprocessNode::onCameraInfo, this, std::placeholders::_1));
 
   image_sub_ = create_subscription<sensor_msgs::msg::Image>(
     image_topic_,
     qos,
-    std::bind(&PreprocessNode::onImage, this, std::placeholders::_1));
+    std::bind(&CameraPreprocessNode::onImage, this, std::placeholders::_1));
 
   image_pub_ = create_publisher<sensor_msgs::msg::Image>(image_rect_topic_, qos);
   camera_info_pub_ =
     create_publisher<sensor_msgs::msg::CameraInfo>(camera_info_rect_topic_, qos);
 }
 
-void PreprocessNode::logResolvedParameters() const
+void CameraPreprocessNode::logResolvedParameters() const
 {
   RCLCPP_INFO(get_logger(), "image_topic=%s", image_topic_.c_str());
   RCLCPP_INFO(get_logger(), "camera_info_topic=%s", camera_info_topic_.c_str());
@@ -74,7 +76,7 @@ void PreprocessNode::logResolvedParameters() const
   RCLCPP_INFO(get_logger(), "camera_info_rect_topic=%s", camera_info_rect_topic_.c_str());
 }
 
-void PreprocessNode::onCameraInfo(sensor_msgs::msg::CameraInfo::ConstSharedPtr msg)
+void CameraPreprocessNode::onCameraInfo(sensor_msgs::msg::CameraInfo::ConstSharedPtr msg)
 {
   camera_info_cache_ = std::make_shared<sensor_msgs::msg::CameraInfo>(*msg);
   pipeline_.updateCalibration(*msg);
@@ -87,7 +89,7 @@ void PreprocessNode::onCameraInfo(sensor_msgs::msg::CameraInfo::ConstSharedPtr m
   }
 }
 
-void PreprocessNode::onImage(sensor_msgs::msg::Image::ConstSharedPtr msg)
+void CameraPreprocessNode::onImage(sensor_msgs::msg::Image::ConstSharedPtr msg)
 {
   if (!camera_info_cache_) {
     RCLCPP_WARN_THROTTLE(

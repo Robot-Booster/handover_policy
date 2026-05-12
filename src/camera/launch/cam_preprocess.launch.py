@@ -13,8 +13,8 @@ def generate_launch_description():
             ),
             Node(
                 package="camera",
-                executable="preprocess_node",
-                name="preprocess_node",
+                executable="camera_pre",
+                name="camera_pre_node",
                 parameters=[LaunchConfiguration("config_file")],
                 output="screen",
             ),

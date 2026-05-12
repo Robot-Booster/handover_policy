@@ -11,9 +11,9 @@
 
 namespace camera {
 
-class PreprocessNode : public rclcpp::Node {
+class CameraPreprocessNode : public rclcpp::Node {
 public:
-  explicit PreprocessNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
+  explicit CameraPreprocessNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
 private:
   void onCameraInfo(sensor_msgs::msg::CameraInfo::ConstSharedPtr msg);

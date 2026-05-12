@@ -21,17 +21,17 @@ target_include_directories(preprocess_pipeline PUBLIC include)
 ament_target_dependencies(preprocess_pipeline sensor_msgs)
 target_link_libraries(preprocess_pipeline ${OpenCV_LIBS})
 
-add_library(preprocess_node_lib src/preprocess_node.cpp)
-target_include_directories(preprocess_node_lib PUBLIC include)
-ament_target_dependencies(preprocess_node_lib rclcpp sensor_msgs cv_bridge)
-target_link_libraries(preprocess_node_lib preprocess_pipeline)
+add_library(camera_preprocess_node_lib src/camera_preprocess_node.cpp)
+target_include_directories(camera_preprocess_node_lib PUBLIC include)
+ament_target_dependencies(camera_preprocess_node_lib rclcpp sensor_msgs cv_bridge)
+target_link_libraries(camera_preprocess_node_lib preprocess_pipeline)
 
-add_executable(preprocess_node src/main.cpp)
-target_link_libraries(preprocess_node preprocess_node_lib)
-ament_target_dependencies(preprocess_node rclcpp)
+add_executable(camera_pre src/main.cpp)
+target_link_libraries(camera_pre camera_preprocess_node_lib)
+ament_target_dependencies(camera_pre rclcpp)
 
 install(
-  TARGETS preprocess_pipeline preprocess_node_lib preprocess_node
+  TARGETS preprocess_pipeline camera_preprocess_node_lib camera_pre
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
