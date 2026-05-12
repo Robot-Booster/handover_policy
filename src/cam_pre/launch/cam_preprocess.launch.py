@@ -4,13 +4,20 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, PushRosNamespace
 
 
-def _launch_with_optional_namespace(context):
-    """Empty namespace → node at /; non-empty → under /<namespace>/."""
+def _launch_cam_pre(context):
+    """
+    Standard layout like realsense2_camera: full node path /namespace/camera_name
+    (topics under params often use ~/color/... so ~ resolves to this node).
+    """
     ns = LaunchConfiguration("namespace").perform(context).strip()
+    cam = LaunchConfiguration("camera_name").perform(context).strip()
+
+    node_name = cam if cam else "camera_pre_node"
+
     node = Node(
         package="cam_pre",
         executable="camera_pre",
-        name="camera_pre_node",
+        name=node_name,
         parameters=[LaunchConfiguration("config_file")],
         output="screen",
     )
@@ -26,14 +33,22 @@ def generate_launch_description():
                 "namespace",
                 default_value="",
                 description=(
-                    "ROS namespace for this node (e.g. cam_left). "
-                    "Empty = root. Only affects node name and ~/ topic relative paths."
+                    "Outer namespace (RealSense-style leading segment), e.g. 'camera'. "
+                    "Empty = node not pushed under extra ns."
+                ),
+            ),
+            DeclareLaunchArgument(
+                "camera_name",
+                default_value="",
+                description=(
+                    "Camera id as node short name, e.g. 'd455'. Full node: /namespace/camera_name. "
+                    "Empty = fallback name 'camera_pre_node'."
                 ),
             ),
             DeclareLaunchArgument(
                 "config_file",
                 description="Path to YAML parameter file (global /** ros__parameters).",
             ),
-            OpaqueFunction(function=_launch_with_optional_namespace),
+            OpaqueFunction(function=_launch_cam_pre),
         ]
     )
