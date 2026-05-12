@@ -1,6 +1,0 @@
-/**:
-  ros__parameters:
-    image_topic: "/camera/color/image_raw"
-    camera_info_topic: "/camera/color/camera_info"
-    image_rect_topic: "/camera/color/image_rect"
-    camera_info_rect_topic: "/camera/color/camera_info_rect"
