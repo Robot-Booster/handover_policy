@@ -5,10 +5,6 @@ from launch_ros.actions import Node, PushRosNamespace
 
 
 def _launch_cam_pre(context):
-    """
-    Standard layout like realsense2_camera: full node path /namespace/camera_name
-    (topics under params often use ~/color/... so ~ resolves to this node).
-    """
     ns = LaunchConfiguration("namespace").perform(context).strip()
     cam = LaunchConfiguration("camera_name").perform(context).strip()
 
