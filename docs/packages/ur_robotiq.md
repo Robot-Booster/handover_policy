@@ -4,7 +4,7 @@
 
 - `ur_robotiq/pose_tracker_node.py`：UR RTDE 控制主节点（servo、moveL、夹爪、TF、TCP 发布）。
 - `launch/pose_tracker.launch.py`：启动脚本与参数入口。
-- `config/pose_tracker.yaml`：机器人 IP、控制频率、手眼参数、夹爪参数等配置。
+- `config/robot_config.yaml`：机器人 IP、控制频率、手眼参数、夹爪参数等配置。
 
 ## 数据流
 

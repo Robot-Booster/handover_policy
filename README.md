@@ -10,11 +10,12 @@
 主数据流如下（按运行链路）：
 
 1. 相机驱动发布图像与相机参数（例如 RealSense）。
-2. `fastfoundation` 基于双目图像推理深度。
-3. `hand_detector` 生成手/目标区域分割掩码。
-4. `pc_processor` 融合深度 + 分割 + ROI/工作空间约束，输出目标点云与质心。
-5. `motion_state_estimator` 结合目标点与 TCP 位姿，输出抓取位姿（含调试点/工作空间可视化）。
-6. `ur_robotiq` 与 `ur_robotiq_interfaces` 负责机械臂执行侧接口（位姿运动、夹爪控制）。
+2. `cam_pre`（可选）对原始图像去畸变，发布 rect 图像与 rect `CameraInfo`。
+3. `fastfoundation` 基于双目图像推理深度。
+4. `hand_detector` 生成手/目标区域分割掩码。
+5. `pc_processor` 融合深度 + 分割 + ROI/工作空间约束，输出目标点云与质心。
+6. `handover_task` 结合目标点与 TCP 位姿，输出抓取位姿并编排交接任务。
+7. `ur_robotiq` 与 `ur_robotiq_interfaces` 负责机械臂执行侧接口（位姿运动、夹爪控制）。
 
 ## 演示视频
 
@@ -27,16 +28,20 @@
 
 ## 子功能包
 
-- `src/fastfoundation`：双目深度推理节点。
-- `src/hand_detector`：分割节点。
-- `src/pc_processor`：点云处理与目标识别节点。
-- `src/motion_state_estimator`：抓取位姿估计节点。
-- `src/ur_robotiq`：机械臂控制侧 ROS2 节点。
-- `src/ur_robotiq_interfaces`：机械臂控制服务接口定义。
+| 包名 | 说明 |
+|------|------|
+| `cam_pre` | 相机图像去畸变预处理（C++）。 |
+| `fastfoundation` | 双目深度推理节点。 |
+| `hand_detector` | YOLO 分割节点。 |
+| `pc_processor` | 点云处理与目标识别节点。 |
+| `handover_task` | 抓取位姿估计与交接任务编排。 |
+| `handover_task_interfaces` | 任务编排服务接口（`BasePolicy.srv`）。 |
+| `ur_robotiq` | 机械臂控制侧 ROS2 节点。 |
+| `ur_robotiq_interfaces` | 机械臂控制服务接口定义。 |
 
 ## 部署说明
 
-> ⚠️ 部署前请先逐个阅读“各子包详细说明”（见下方链接），确认参数、话题、坐标系和资源路径都已对齐，再开始部署；否则很容易出现未知问题（无输出、坐标错位、控制拒收等）。
+> ⚠️ 部署前请先逐个阅读「各子包详细说明」（见下方链接），确认参数、话题、坐标系和资源路径都已对齐，再开始部署；否则很容易出现无输出、坐标错位、控制拒收等问题。
 
 ### 1) 环境与依赖
 
@@ -61,32 +66,44 @@ source install/setup.bash
 
 ### 4) 启动顺序（建议）
 
+
 ```bash
-# 1. 相机驱动（示例）
-ros2 launch realsense2_camera rs_launch.py config_file:=/path/to/d455.yaml camera_name:=d455
+# 1. 相机驱动
+ros2 launch realsense2_camera rs_launch.py \
+  config_file:=/home/ender/handover_baseline/scripts/d455_config.yaml \
+  camera_name:=d455 camera_namespace:=left
 
-# 2. 机械臂状态/控制节点
-ros2 launch ur_robotiq pose_tracker.launch.py params_file:=/home/ender/handover_baseline/src/ur_robotiq/config/robot_config.yaml
+# 2. 图像预处理（去畸变）
+ros2 launch cam_pre cam_preprocess.launch.py \
+  config_file:=/home/ender/handover_baseline/src/cam_pre/config/config.yaml \
+  camera_name:=d455 namespace:=left
 
-# 3. 双目深度
+# 3. 机械臂状态/控制节点
+ros2 launch ur_robotiq pose_tracker.launch.py \
+  params_file:=/home/ender/handover_baseline/src/ur_robotiq/config/robot_config.yaml
+
+# 4. 双目深度
 ros2 launch fastfoundation launch_fastfoundation.launch.py \
   params_file:=/home/ender/handover_baseline/src/fastfoundation/config/d455.yaml \
   namespace:=d455
 
-# 4. 分割
+# 5. 分割
 ros2 launch hand_detector hand_detector.launch.py \
   namespace:=d455 \
   config_file:=/home/ender/handover_baseline/src/hand_detector/config/config.yaml \
   image_topic:=/camera/d455/infra1/image_rect_raw
 
-# 5. 点云处理/目标识别
+# 6. 点云处理/目标识别
 ros2 launch pc_processor perception.launch.py \
   namespace:=d455 \
   config_file:=/home/ender/handover_baseline/src/pc_processor/config/d455_perception.yaml
 
-# 6. 抓取位姿估计
+# 7. 抓取位姿估计与任务编排
 ros2 launch handover_task base_policy.launch.py \
   config_file:=/home/ender/handover_baseline/src/handover_task/config/base_policy.yaml
+
+# 8. 触发一次交接任务
+ros2 service call /base_policy/base_policy handover_task_interfaces/srv/BasePolicy "{trigger: true}"
 ```
 
 ### 5) 机械臂适配注意事项（重要）
@@ -95,18 +112,19 @@ ros2 launch handover_task base_policy.launch.py \
 - 你的机械臂若不是 UR+Robotiq，需单独实现自己的控制包。
 - 新控制包建议对齐 `ur_robotiq_interfaces` 的服务语义与消息约定，保证上层流程最小改动可复用。
 
-## 各子包详细文档占位
+## 各子包详细文档
 
+- [`cam_pre` 详细说明](docs/packages/cam_pre.md)
 - [`fastfoundation` 详细说明](docs/packages/fastfoundation.md)
 - [`hand_detector` 详细说明](docs/packages/hand_detector.md)
 - [`pc_processor` 详细说明](docs/packages/pc_processor.md)
-- [`motion_state_estimator` 详细说明](docs/packages/motion_state_estimator.md)
+- [`handover_task` 详细说明](docs/packages/handover_task.md)
+- [`handover_task_interfaces` 详细说明](docs/packages/handover_task_interfaces.md)
 - [`ur_robotiq` 详细说明](docs/packages/ur_robotiq.md)
 - [`ur_robotiq_interfaces` 详细说明](docs/packages/ur_robotiq_interfaces.md)
 
 ## 现有问题说明
 
-- 当前 YOLO 分割能力不足，现有模型开发较仓促，无法稳定剔除整条手臂。
-- 需要补一个可分割“手臂+手掌”的模型；否则当手臂深入点云工作区时，系统会把手臂误判为待抓物体，导致目标追踪失效。
-- 目前抓取旋转角与抓取宽度无法可靠估计，抓稳主要依赖写死的力控参数与闭合宽度。
-- 状态估计相关参数仍需持续调参（含滤波与阈值类参数），才能达到更稳定的实际效果。
+- 当前 YOLO 分割能力不足，现有模型开发较仓促，无法稳定剔除整条手臂。（新用了200张数据集做了个专门剔除手臂的模型，未测试）
+- 目前抓取旋转角与抓取宽度无法可靠估计，抓稳主要依赖写死的力控参数与闭合宽度。（在做触觉了）
+- 状态估计相关参数仍需持续调参（含滤波与阈值类参数），才能达到更稳定的实际效果。（建议使用加速度状态转移模型，并换成fillter库，对瞬时运动有更好的效果）
